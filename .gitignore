@@ -1,0 +1,12 @@
+# segredos / kubeconfig que por acaso caiam no repo
+*.kubeconfig
+admin.conf
+kubeadm-init.out
+*.token
+
+# lixo de editor / SO
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
