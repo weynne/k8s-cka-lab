@@ -1,11 +1,16 @@
-# CKA Lab — cluster kubeadm on-premise (Hyper-V)
+# CKA/CKAD Lab — cluster kubeadm on-premise
 
-Runbook de montagem manual de um cluster Kubernetes para estudo da **CKA**.
-Cada fase tem seus comandos, a explicação do **que** e **por quê**, e um bloco de
-**Resultado** que eu preencho conforme rodo.
+Runbook de montagem manual de um cluster Kubernetes para estudo da **CKA** e da
+**CKAD**. Cada fase tem seus comandos, a explicação do **que** e **por quê**, e um
+bloco de **Resultado** que eu preencho conforme rodo.
 
-> **📖 Documentação permitida na CKA:** na prova você só acessa
-> **`kubernetes.io/docs`** (e subdomínios) e **`kubernetes.io/blog`**. Por isso os
+> As **Fases 0–6 montam o cluster** (é o mesmo pras duas provas). Depois, a prática
+> se divide por certificação: [pratica/](pratica/README.md) para a **CKA** e
+> [pratica-ckad/](pratica-ckad/README.md) para a **CKAD**.
+
+> **📖 Documentação permitida na prova:** você só acessa
+> **`kubernetes.io/docs`** (e subdomínios) e **`kubernetes.io/blog`** — na CKAD
+> valem também **`helm.sh/docs`** e **`kustomize.io`**. Por isso os
 > links do runbook são marcados:
 > - **📖 liberado na prova** → páginas do `kubernetes.io` (pode usar no exame).
 > - **🔧 montagem do lab** → Vagrant, Hyper-V, Calico (`docs.tigera.io`) etc.:
@@ -29,6 +34,13 @@ Cada fase tem seus comandos, a explicação do **que** e **por quê**, e um bloc
 > O ambiente acima é o de **referência (Windows)**. O runbook também roda com host
 > **Linux (KVM/libvirt)** — só muda a [Fase 0](00-preparacao-host-vms.md); as
 > Fases 1–6 são idênticas.
+>
+> ☁️ **Tem um lab na AWS?** Existe um terceiro caminho, opcional:
+> [Caminho C — nós na AWS (EC2)](00b-aws-ec2.md). Ele substitui a Fase 0, encolhe a
+> Fase 1 (nada de netplan: o IP privado da EC2 já é fixo) e deixa as **Fases 2–6
+> intactas** — troque `192.168.137.x` pelos IPs privados da sua sub-rede. O que
+> aparece de novo lá é o **Security Group** (o firewall que o lab local não tem) e
+> o controle de custo. Sem lab AWS pronto, prefira o local: é de graça.
 >
 > A rede do lab é **`192.168.137.0/24`** com gateway **`.1`** (NAT/DHCP/DNS). No
 > Windows isso vem do **ICS** (que fixa essa faixa); no Linux, de uma rede NAT do
@@ -65,6 +77,10 @@ Defina uma vez e reutilize em todas as fases. Valores conferidos em jul/2026.
 
 ## Plano de IPs
 
+> No [Caminho C (AWS)](00b-aws-ec2.md) esta tabela vira o
+> [plano de IPs privados](00b-aws-ec2.md#c3--plano-de-ips-na-aws) da sua sub-rede
+> VPC — o resto do runbook é o mesmo.
+
 | Host | Papel | IP estático | Notas |
 |------|-------|-------------|-------|
 | gateway (host Windows/ICS) | NAT + DNS | `192.168.137.1` | não é uma VM |
@@ -89,7 +105,8 @@ Portas que vão importar (para lembrar na CKA) —
 ## Progresso
 
 - [ ] Fase 0 — host pronto (Hyper-V/switch/ICS) + `vagrant up` (3 VMs running)
-- [ ] Fase 1 — VMs de pé + IP estático + DNS/ping OK
+      _— ou [Caminho C](00b-aws-ec2.md): 3 EC2 + Security Group + hostnames_
+- [ ] Fase 1 — VMs de pé + IP estático + DNS/ping OK _(na AWS: só hostname/hosts)_
 - [ ] Fase 2 — containerd + swap off + módulos/sysctl nos 3 nós
 - [ ] Fase 3 — kubeadm/kubelet/kubectl instalados nos 3 nós
 - [ ] Fase 4 — `kubeadm init` OK + kubeconfig + control plane Ready
@@ -107,5 +124,7 @@ Portas que vão importar (para lembrar na CKA) —
    baseline pra comparar quando algo quebrar depois).
 4. Quebrou? Registre em [07-troubleshooting.md](07-troubleshooting.md) com
    sintoma → diagnóstico → correção.
-5. Cluster de pé? Vá pra **[pratica/](pratica/README.md)** — exercícios estilo
-   prova pelos 5 domínios da CKA (por peso). É onde mora o grosso da nota.
+5. Cluster de pé? Vá pra prática — é onde mora o grosso da nota:
+   **[pratica/](pratica/README.md)** (CKA) ou
+   **[pratica-ckad/](pratica-ckad/README.md)** (CKAD, com os add-ons que o lab
+   precisa ganhar antes).

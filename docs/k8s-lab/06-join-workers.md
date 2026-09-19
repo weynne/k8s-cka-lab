@@ -107,9 +107,11 @@ e `http://192.168.137.12:<NodePort>` — deve responder o nginx pelos dois worke
 
 ---
 
-🎉 **Cluster completo.** Atualize o [progresso no README](README.md#progresso) e
-vá pra **[pratica/](pratica/README.md)** — exercícios estilo prova pelos 5 domínios
-da CKA (por peso). Referência rápida de comandos no [cheatsheet](08-cheatsheet-cka.md).
+🎉 **Cluster completo.** Atualize o [progresso no README](README.md#progresso) e vá
+pra prática — exercícios estilo prova pelos 5 domínios de cada certificação (por
+peso): **[pratica/](pratica/README.md)** (CKA) ou
+**[pratica-ckad/](pratica-ckad/README.md)** (CKAD — instale antes os add-ons
+listados lá). Referência rápida de comandos no [cheatsheet](08-cheatsheet-cka.md).
 
 ## Notas / gotchas
 

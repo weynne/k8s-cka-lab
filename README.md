@@ -1,8 +1,10 @@
 # k8s-lab
 
-Runbook de estudo para a **CKA** — cluster Kubernetes on-premise montado 100% na
+Runbook de estudo para a **CKA** e a **CKAD** — cluster Kubernetes on-premise montado 100% na
 mão (kubeadm), em VMs locais (Hyper-V no Windows **ou** KVM/libvirt no Linux — ver
-[Fase 0](docs/k8s-lab/00-preparacao-host-vms.md)).
+[Fase 0](docs/k8s-lab/00-preparacao-host-vms.md)). Já tem um **lab na AWS**? Dá pra
+montar o mesmo cluster em EC2 pelo
+[Caminho C](docs/k8s-lab/00b-aws-ec2.md) — as Fases 2–6 não mudam.
 
 A documentação viva fica em **[docs/k8s-lab/](docs/k8s-lab/README.md)**.
 👉 **Comece pela [Fase 0](docs/k8s-lab/00-preparacao-host-vms.md).**
@@ -24,6 +26,7 @@ no checklist em [docs/k8s-lab/README.md](docs/k8s-lab/README.md#progresso).
 |------|---------|---------|
 | — | [README / ambiente](docs/k8s-lab/README.md) | ✅ |
 | 0 | [Preparação do host + vagrant up](docs/k8s-lab/00-preparacao-host-vms.md) | ✅ |
+| 0-C | [Alternativa: nós na AWS (EC2)](docs/k8s-lab/00b-aws-ec2.md) — opcional | ☁️ |
 | 1 | [VMs e rede (netplan)](docs/k8s-lab/01-vms-e-rede.md) | ✅ |
 | 2 | [Preparação dos nós (containerd, swap, sysctl)](docs/k8s-lab/02-preparacao-nos.md) | ✅ |
 | 3 | [Instalação kubeadm/kubelet/kubectl](docs/k8s-lab/03-instalacao-kube-tools.md) | ✅ |
@@ -33,6 +36,15 @@ no checklist em [docs/k8s-lab/README.md](docs/k8s-lab/README.md#progresso).
 | — | [Troubleshooting](docs/k8s-lab/07-troubleshooting.md) | 📓 |
 | — | [Cheatsheet CKA](docs/k8s-lab/08-cheatsheet-cka.md) | 📓 |
 | — | [**Prática CKA por domínio**](docs/k8s-lab/pratica/README.md) | 🎯 |
+| — | [**Prática CKAD por domínio**](docs/k8s-lab/pratica-ckad/README.md) | 🎯 |
 
-Depois do cluster de pé (Fases 0–6), a pasta [pratica/](docs/k8s-lab/pratica/README.md)
-tem os exercícios estilo prova, organizados pelos 5 domínios do currículo (por peso).
+Depois do cluster de pé (Fases 0–6), os exercícios estilo prova ficam organizados
+pelos 5 domínios de cada certificação (por peso):
+
+- [**pratica/**](docs/k8s-lab/pratica/README.md) — **CKA**: operar e consertar o
+  cluster (troubleshooting, etcd, upgrade, certs, RBAC).
+- [**pratica-ckad/**](docs/k8s-lab/pratica-ckad/README.md) — **CKAD**: construir e
+  implantar a aplicação (config/secrets, probes, Jobs, Helm/Kustomize, policies).
+  Pede alguns add-ons no lab — a página traz a receita.
+
+O mesmo cluster serve às duas provas.

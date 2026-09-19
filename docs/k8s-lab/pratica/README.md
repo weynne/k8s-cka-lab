@@ -1,5 +1,8 @@
 # Prática CKA — exercícios por domínio
 
+> Procurando a **CKAD**? A trilha dela é a
+> [pratica-ckad/](../pratica-ckad/README.md) — mesmo cluster, outro currículo.
+
 Depois que o cluster está de pé (Fases 0–6), é **aqui** que mora o que mais vale
 ponto na prova. A CKA é **100% prática**: 15–20 tarefas em **2 horas** num terminal,
 sobre um cluster que já existe. Cada arquivo abaixo é um conjunto de exercícios no
@@ -63,4 +66,6 @@ O currículo você já sabe; **isto aqui é o que separa quem passa**:
 4. **Redes (20%)** → **Workloads (15%)** → **Storage (10%)**.
 5. Quebrou algo? Registre em [../07-troubleshooting.md](../07-troubleshooting.md).
 6. `vagrant snapshot save limpo` antes de exercícios destrutivos; `restore` pra
-   voltar rápido.
+   voltar rápido. No lab **AWS** não há snapshot instantâneo — use AMI ou, mais
+   prático, reconstrua com `kubeadm reset` + Fases 4–6
+   ([C10](../00b-aws-ec2.md#c10--ciclo-de-vida-parar-religar-e-destruir)).
