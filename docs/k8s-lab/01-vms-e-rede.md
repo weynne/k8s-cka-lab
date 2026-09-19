@@ -11,6 +11,13 @@ hostname de cada um).
 `running` e acessíveis via `vagrant ssh`. Todos os passos abaixo são **dentro**
 da VM (entre com `vagrant ssh <nome>`).
 
+> ☁️ **Veio pelo [Caminho C (AWS/EC2)](00b-aws-ec2.md)?** **Não rode os Passos 1–3**
+> (netplan estático): na EC2 o IP privado já é fixo e vem por DHCP da VPC —
+> escrever IP à mão é a forma mais rápida de perder o SSH da instância. Dessa fase,
+> só valem os **Passos 4 e 5** (hostname, `/etc/hosts`, conectividade), já cobertos
+> em [C6](00b-aws-ec2.md#c6--hostname-e-etchosts-o-que-sobra-da-fase-1). Siga de lá
+> direto pra [Fase 2](02-preparacao-nos.md).
+
 > **Por que IP estático?** O ICS entrega IPs por DHCP, mas eles podem mudar num
 > reboot. O control plane publica seu endereço no certificado do apiserver e nos
 > manifests; se o IP dos nós dançar, o cluster quebra. Fixar IP é pré-requisito.

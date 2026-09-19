@@ -51,6 +51,63 @@ antecipação:
 
 ---
 
+## Gotchas do [Caminho C — lab na AWS](00b-aws-ec2.md)
+
+Só valem se você montou o cluster em EC2. **Regra de ouro: na AWS, suspeite do
+Security Group antes de qualquer outra coisa** — ele falha em silêncio (timeout),
+não com erro claro.
+
+### A1. `kubeadm join` trava ou dá timeout no apiserver
+- **Sintoma:** o join fica pendurado e termina em
+  `couldn't validate the identity of the API Server` / connection timed out.
+- **Causa:** worker não alcança a **6443** do control plane (SG sem a regra
+  self-reference, ou instâncias com SGs diferentes).
+- **Diagnóstico:** do worker, `nc -zv <ip-privado-cp> 6443`.
+- **Correção:** [C4](00b-aws-ec2.md#c4--security-group-as-regras-a-parte-que-mais-quebra) —
+  mesmo SG nas 3 instâncias, com "all traffic" vindo do próprio SG.
+
+### A2. `kubectl logs`/`exec` dá timeout (mas `get`/`describe` funcionam)
+- **Sintoma:** `Error from server: Get "https://<ip>:10250/...": dial tcp i/o timeout`.
+- **Causa:** apiserver não alcança a **10250** (kubelet) do nó alvo — SG de novo.
+- **Correção:** liberar 10250 entre os nós (a regra self-reference cobre).
+
+### A3. Nós Ready, mas pod de um nó não fala com pod do outro
+- **Sintoma:** ping entre nós OK, service intermitente (só responde quando cai no
+  pod local), CoreDNS resolvendo às vezes.
+- **Causa:** tráfego **encapsulado** do CNI bloqueado — IPIP (**protocolo 4**,
+  default do `calico.yaml`), VXLAN (**4789/udp**) ou Flannel (**8472/udp**). Um SG
+  aberto só em TCP não deixa passar.
+- **Correção:** regra com `--protocol -1` vindo do próprio SG.
+- **Variante:** se você desligou o encapsulamento (Calico roteado), é o
+  **source/dest check** da EC2 descartando o pacote → veja
+  [C5](00b-aws-ec2.md#c5--sourcedest-check-e-mtu).
+
+### A4. Download/`curl` dentro do pod trava no meio
+- **Sintoma:** ping e requisições pequenas OK; transferência maior congela.
+- **Causa:** MTU. A VPC usa 9001 e o overlay soma cabeçalho.
+- **Correção:** fixar a MTU do CNI (8941, ou 1440 conservador) —
+  [C5](00b-aws-ec2.md#c5--sourcedest-check-e-mtu).
+
+### A5. Depois de parar/religar as instâncias, o kubectl de fora não conecta
+- **Sintoma:** `kubectl` do notebook dá timeout ou erro de certificado; dentro do
+  `k8s-cp` está tudo Ready.
+- **Causa:** sem Elastic IP, o **IP público mudou** no start — o kubeconfig aponta
+  pro endereço antigo (e o SAN do certificado não cobre o novo).
+- **Correção:** refazer o `server:` do kubeconfig
+  ([C8](00b-aws-ec2.md#c8--kubectl-da-sua-máquina-wsl-apontando-pro-cluster)) ou associar um EIP.
+  **O IP privado não muda** — o cluster em si continua íntegro.
+
+### A6. Nó volta como `ip-10-x-x-x` depois do reboot
+- **Sintoma:** o hostname renomeado some; aparece um nó duplicado no
+  `kubectl get nodes`.
+- **Causa:** cloud-init reescreve o hostname a cada boot.
+- **Correção:** `preserve_hostname: true` em `/etc/cloud/cloud.cfg.d/99-hostname.cfg`
+  ([C6](00b-aws-ec2.md#c6--hostname-e-etchosts-o-que-sobra-da-fase-1)). Se já entrou
+  no cluster com o nome errado: `kubectl delete node <nome-antigo>` + `kubeadm reset`
+  e join de novo (ou use `--node-name` no join).
+
+---
+
 ## Comandos de diagnóstico que sempre ajudam
 
 ```bash

@@ -8,8 +8,11 @@ roda **dentro** dos guests Ubuntu, idêntico. Escolha seu caminho:
 
 - **[Caminho A — host Windows (Hyper-V)](#caminho-a--host-windows-hyper-v)**
 - **[Caminho B — host Linux (KVM/libvirt)](#caminho-b--host-linux-kvmlibvirt)**
+- **[Caminho C — nós na AWS (EC2)](00b-aws-ec2.md)** → arquivo à parte; use **só
+  se você já tem um lab AWS**. Não tem? Fique no A ou B (EC2 desse tamanho não é
+  free tier e o lab local ensina a mesma coisa de graça).
 
-**Meta comum (qualquer host):** 3 VMs Ubuntu 24.04 (`k8s-cp`, `k8s-w1`, `k8s-w2`)
+**Meta comum (Caminhos A/B):** 3 VMs Ubuntu 24.04 (`k8s-cp`, `k8s-w1`, `k8s-w2`)
 na rede **`192.168.137.0/24`** (gateway `.1`), acessíveis via `vagrant ssh`.
 
 > **Por que os dois hosts usam `192.168.137.0/24`?** No Windows essa faixa é

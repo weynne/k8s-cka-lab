@@ -51,6 +51,13 @@ O que cada flag faz:
 - `| tee kubeadm-init.out` — salva a saída num arquivo (está no `.gitignore`).
   **Guarde-o:** ele contém o comando `kubeadm join ...` que os workers precisam.
 
+> ☁️ **Lab na AWS ([Caminho C](00b-aws-ec2.md))?** Duas trocas aqui:
+> `--apiserver-advertise-address` recebe o **IP privado** do `k8s-cp` (não o
+> público), e, se você for usar `kubectl` da sua máquina/WSL, acrescente
+> **agora** `--apiserver-cert-extra-sans=<ip-publico-ou-EIP>` — depois do init, só
+> regerando o certificado
+> ([C8](00b-aws-ec2.md#c8--kubectl-da-sua-máquina-wsl-apontando-pro-cluster)).
+
 > O que o `init` faz por baixo: sobe o **etcd** e os componentes do control plane
 > como *static pods* em `/etc/kubernetes/manifests/`, gera os **certificados** em
 > `/etc/kubernetes/pki/`, configura o kubelet e cria o token de bootstrap.
