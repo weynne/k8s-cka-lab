@@ -1,0 +1,10 @@
+#cloud-config
+# Prepara SO apenas: hostname estavel e resolucao de nomes entre os nos.
+# Equivale ao C6 do runbook (../../docs/k8s-lab/00b-aws-ec2.md) — o resto e na mao.
+hostname: ${hostname}
+preserve_hostname: false
+manage_etc_hosts: false
+runcmd:
+%{ for nome, ip in hosts ~}
+  - ["sh", "-c", "grep -q ' ${nome}$' /etc/hosts || echo '${ip} ${nome}' >> /etc/hosts"]
+%{ endfor ~}

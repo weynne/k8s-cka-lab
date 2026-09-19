@@ -13,9 +13,9 @@ A documentação viva fica em **[docs/k8s-lab/](docs/k8s-lab/README.md)**.
 
 - Nada de Kubernetes é automatizado. Cada comando é rodado à mão, entendido e o
   resultado é documentado. O objetivo é aprender fazendo — igual à prova.
-- O Vagrantfile só provisiona as VMs + rede (Fase 0). As Fases 0–1 cuidam de
-  host, VMs e rede; a parte de Kubernetes na mão começa na
-  [Fase 2](docs/k8s-lab/02-preparacao-nos.md).
+- O Vagrantfile (local) e o [Terraform](terraform/aws/README.md) (AWS) só
+  provisionam máquinas + rede. As Fases 0–1 cuidam de host, VMs e rede; a parte de
+  Kubernetes na mão começa na [Fase 2](docs/k8s-lab/02-preparacao-nos.md).
 
 ## Índice rápido
 
@@ -27,6 +27,7 @@ no checklist em [docs/k8s-lab/README.md](docs/k8s-lab/README.md#progresso).
 | — | [README / ambiente](docs/k8s-lab/README.md) | ✅ |
 | 0 | [Preparação do host + vagrant up](docs/k8s-lab/00-preparacao-host-vms.md) | ✅ |
 | 0-C | [Alternativa: nós na AWS (EC2)](docs/k8s-lab/00b-aws-ec2.md) — opcional | ☁️ |
+| 0-C | [Terraform/OpenTofu da infra AWS](terraform/aws/README.md) — para repetir o lab | 🤖 |
 | 1 | [VMs e rede (netplan)](docs/k8s-lab/01-vms-e-rede.md) | ✅ |
 | 2 | [Preparação dos nós (containerd, swap, sysctl)](docs/k8s-lab/02-preparacao-nos.md) | ✅ |
 | 3 | [Instalação kubeadm/kubelet/kubectl](docs/k8s-lab/03-instalacao-kube-tools.md) | ✅ |

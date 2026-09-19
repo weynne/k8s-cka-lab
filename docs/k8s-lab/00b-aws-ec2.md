@@ -58,6 +58,13 @@ free tier**.
 
 > Já tem as 3 instâncias? Confira os **pré-requisitos** logo abaixo e vá pro
 > [C2](#c2--inventário-dos-nós-preencha).
+>
+> 🤖 **Já fez isso na mão uma vez?** Existe um Terraform/OpenTofu pronto em
+> [terraform/aws/](../../terraform/aws/README.md) que cria VPC, sub-rede, SG, key
+> pair e as instâncias (com os IPs privados `.10`/`.11`/`.12` já fixos) num
+> `apply`. Ele **não instala nada de Kubernetes** — Fases 2–6 seguem na mão. Faça
+> pelo menos a primeira vez por aqui: entender o que o SG e o plano de IPs fazem é
+> o que evita horas de debug depois.
 
 **O que as instâncias precisam ter** (e o porquê de cada escolha):
 
@@ -678,6 +685,10 @@ aws ec2 create-image --instance-id $CP --name "k8s-cp-limpo-$(date +%F)" --no-re
   reset -f` nos 3 nós e repetir Fases 4–6 (leva ~10 min e **é treino de prova**).
 - O que vale mesmo snapshotar é o estado **antes** dos exercícios de etcd
   restore e de upgrade.
+
+> 🤖 Subiu o lab com o [Terraform](../../terraform/aws/README.md)? Então
+> `terraform destroy` faz toda a limpeza abaixo de uma vez — e `terraform apply`
+> reconstrói quando quiser voltar.
 
 **Destruir o lab de vez** (acabou o estudo — evita cobrança esquecida):
 

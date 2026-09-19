@@ -4,6 +4,17 @@ admin.conf
 kubeadm-init.out
 *.token
 
+# terraform / opentofu
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+crash.log
+crash.*.log
+*.tfvars
+!*.tfvars.example
+
 # lixo de editor / SO
 .DS_Store
 *.swp

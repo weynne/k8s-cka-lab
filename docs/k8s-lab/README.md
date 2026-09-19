@@ -41,6 +41,8 @@ bloco de **Resultado** que eu preencho conforme rodo.
 > intactas** — troque `192.168.137.x` pelos IPs privados da sua sub-rede. O que
 > aparece de novo lá é o **Security Group** (o firewall que o lab local não tem) e
 > o controle de custo. Sem lab AWS pronto, prefira o local: é de graça.
+> Depois de montar na mão uma vez, o [Terraform](../../terraform/aws/README.md)
+> recria a infra num `apply` (e continua não instalando nada de Kubernetes).
 >
 > A rede do lab é **`192.168.137.0/24`** com gateway **`.1`** (NAT/DHCP/DNS). No
 > Windows isso vem do **ICS** (que fixa essa faixa); no Linux, de uma rede NAT do

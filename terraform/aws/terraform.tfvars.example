@@ -1,0 +1,24 @@
+# Copie para terraform.tfvars e ajuste. terraform.tfvars esta no .gitignore.
+
+# Obrigatorio: quem pode fazer SSH nos nos.
+# Descubra seu IP:  curl -s https://checkip.amazonaws.com
+allowed_ssh_cidr = "203.0.113.4/32"
+
+# Regiao (us-east-1 e a mais barata; sa-east-1 = Sao Paulo, menos latencia e mais caro)
+region = "us-east-1"
+
+# Economia: 1 worker em vez de 2 (-~US$0,02/h e -2 GB de RAM)
+# worker_count = 1
+
+# Vai rodar kubectl da sua maquina/WSL apontando pro cluster?
+# Entao libere a 6443 e fixe o IP publico do control plane com um Elastic IP.
+# Lembre de passar --apiserver-cert-extra-sans=<ip publico> no kubeadm init (Fase 4).
+# expose_apiserver = true
+# allocate_eip     = true
+
+# Testar NodePort pelo navegador (de dentro do no funciona sem isso)
+# expose_nodeports = true
+
+# Chave SSH: por default instala ~/.ssh/id_ed25519.pub nos nos.
+# Para reusar uma key pair que ja existe na AWS:
+# key_name = "minha-chave"
