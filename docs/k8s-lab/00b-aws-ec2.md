@@ -11,8 +11,9 @@ os IPs.
 - **Já tem?** Pule pro [C2 — inventário](#c2--inventário-dos-nós-preencha).
 
 **Quando NÃO usar:** se você não faz questão da AWS, **o lab local sai de graça**
-(Caminho A/B) e ensina exatamente a mesma coisa de CKA. EC2 nesse tamanho **não é
-free tier**.
+(Caminho A/B) e ensina exatamente a mesma coisa de CKA. Na AWS, só conta nova
+(free tier por créditos, pós-07/2025) roda o lab sem pagar — e mesmo assim
+consumindo crédito ([detalhes no C1](#topologia-3-ec2--1-control-plane--2-workers)).
 
 > 💸 **Custo — leia antes de criar qualquer coisa.** Ordem de grandeza em
 > `us-east-1` (on-demand): `t3.medium` ≈ **US$ 0,042/h**, `t3.small` ≈ **US$
@@ -56,8 +57,8 @@ free tier**.
 
 ## C1 — criar as EC2 (passo a passo)
 
-> Já tem as 3 instâncias? Confira os **pré-requisitos** logo abaixo e vá pro
-> [C2](#c2--inventário-dos-nós-preencha).
+> Já tem as instâncias? Confira a **topologia** e os **pré-requisitos** logo abaixo
+> e vá pro [C2](#c2--inventário-dos-nós-preencha).
 >
 > 🤖 **Já fez isso na mão uma vez?** Existe um Terraform/OpenTofu pronto em
 > [terraform/aws/](../../terraform/aws/README.md) que cria VPC, sub-rede, SG, key
@@ -66,17 +67,64 @@ free tier**.
 > pelo menos a primeira vez por aqui: entender o que o SG e o plano de IPs fazem é
 > o que evita horas de debug depois.
 
+### Topologia: 3 EC2 = **1 control plane + 2 workers**
+
+Exatamente **três** instâncias — mesma topologia do lab local e do ambiente da
+prova:
+
+| Nome (tag e hostname) | Papel | Quantidade | Tipo | IP privado fixo |
+|-----------------------|-------|:----------:|------|-----------------|
+| `k8s-cp` | **control plane** (apiserver, etcd, scheduler, controller-manager) | **1** | `t3.medium` (ou `t3.small`, ver abaixo) | `10.0.1.10` |
+| `k8s-w1` | **worker** | **1** | `t3.small` | `10.0.1.11` |
+| `k8s-w2` | **worker** | **1** | `t3.small` | `10.0.1.12` |
+
+- **Por que 1 CP só:** CP em HA (3 CPs + load balancer) está fora do escopo da
+  CKA e triplica o custo. Um CP basta pra treinar `init`, etcd backup/restore e
+  upgrade.
+- **Por que 2 workers:** com um só, não dá pra treinar `drain`/`cordon`, afinidade,
+  taints e "o pod foi pro outro nó". Dois é o mínimo que torna isso visível.
+- **Os IPs fixos** (`.10`/`.11`/`.12`) espelham o `192.168.137.10-12` do lab local e
+  batem com o Terraform — o `/etc/hosts` do [C6](#c6--hostname-e-etchosts-o-que-sobra-da-fase-1)
+  fica igual em todo lab. A AWS reserva os 4 primeiros IPs da sub-rede, por isso
+  começamos no `.10`.
+
 **O que as instâncias precisam ter** (e o porquê de cada escolha):
 
 | Item | Valor | Por quê |
 |------|-------|---------|
-| SO | **Ubuntu 24.04 LTS** | o runbook é escrito pra ele (netplan, apt, cgroup v2). Amazon Linux funciona, mas muda os comandos de pacote |
-| Control plane | **`t3.medium`** (2 vCPU / 4 GB) | preflight do kubeadm exige ≥ 2 vCPU e ≥ 1700 MB **no CP** |
+| SO | **Ubuntu 24.04 LTS, x86_64** | o runbook é escrito pra ele (netplan, apt, cgroup v2). Amazon Linux ou ARM (Graviton) funcionam, mas mudam comandos de pacote e binários |
+| Control plane | **`t3.medium`** (2 vCPU / 4 GB) — mínimo viável: `t3.small` | preflight do kubeadm exige ≥ 2 vCPU e ≥ 1700 MB **no CP**. Ver "CP em `t3.small`" abaixo |
 | Workers | **`t3.small`** (2 vCPU / 2 GB) | join não checa CPU; 2 GB roda liso. **`t2/t3.micro` (1 GB) não serve** nem de worker |
 | Disco | **20 GB gp3** cada | imagens de container comem espaço; com 8 GB você bate em `DiskPressure` |
-| Rede | as 3 na **mesma VPC e mesma sub-rede (mesma AZ)** | rede plana entre os nós + zero custo de tráfego cross-AZ |
+| Rede | **VPC dedicada**, as 3 na **mesma sub-rede (mesma AZ)** | rede plana entre os nós + zero custo de tráfego cross-AZ + CIDR que não colide com o do cluster |
 | Saída pra internet | sub-rede **pública** (IGW + IP público) | as Fases 2/3 baixam pacotes e imagens. Sub-rede privada só com NAT Gateway (que custa ~US$ 32/mês — evite no lab) |
-| Acesso | **key pair** SSH | é como você entra nos nós |
+| Acesso | **uma** key pair SSH, a mesma nas 3 | é como você entra nos nós |
+
+> 🆓 **CP em `t3.small` (free tier)?** Dá. O `t3.small` tem 2 vCPU / 2 GB e passa
+> no preflight do kubeadm (≥ 2 vCPU, ≥ 1700 MB). O preço é a folga: apiserver +
+> etcd + controller-manager + scheduler + Calico já ocupam ~1,3–1,5 GB, então
+> sobra pouco. No estudo do dia a dia vai bem; onde aperta é no **etcd restore**, no
+> **`kubeadm upgrade`** e se você rodar workload no CP. Sintomas: apiserver
+> reiniciando, `kubectl` dando timeout, `dmesg | grep -i oom`. Se acontecer, pare a
+> instância e troque o tipo (`aws ec2 modify-instance-attribute --instance-id $CP
+> --instance-type t3.medium`, com ela **parada**) — nada do cluster se perde.
+>
+> Sobre o "gratuito": contas criadas **a partir de 15/07/2025** entram no free
+> tier novo, que é **por créditos** (US$ 100 na criação + até US$ 100 em
+> atividades, válidos por 6 meses) e aceita `t3.micro`/`t3.small`, entre outros.
+> Ou seja, o `t3.small` **gasta crédito** (não é "de graça ilimitado"), e o
+> `t3.medium` também sai do mesmo crédito. Na diferença de ~US$ 0,02/h, os
+> créditos cobrem o lab com qualquer um dos dois. Contas **anteriores** a essa
+> data seguem no free tier antigo (750 h/mês só de `t2.micro`/`t3.micro`, que
+> **não servem** pro lab) — pra elas, tudo aqui é cobrado. Confira em **Billing →
+> Free Tier** qual é o seu caso.
+
+**Ordem de criação** — cada recurso depende do anterior, e **nenhuma EC2 é criada
+antes do C1.5**:
+
+```text
+C1.1 CLI  →  C1.2 VPC + sub-rede + IGW  →  C1.3 key pair  →  C1.4 Security Group + regras  →  C1.5 as 3 EC2
+```
 
 ### C1.1 — preparar a AWS CLI
 
@@ -86,69 +134,137 @@ aws configure                 # access key, secret, região default, output
 aws sts get-caller-identity   # confirma com qual conta/usuário você está falando
 ```
 
-- O usuário/role precisa de permissão de **EC2** (criar key pair, security group e
-  instâncias). `AmazonEC2FullAccess` resolve num lab pessoal.
+- O usuário/role precisa de permissão de **EC2 e VPC** (criar VPC, sub-rede, key
+  pair, security group e instâncias). `AmazonEC2FullAccess` resolve num lab
+  pessoal (ela já inclui as ações de VPC).
 - Fixe a região na sessão (use a mesma em **todos** os comandos daqui pra frente):
   ```bash
   export AWS_REGION=us-east-1      # mais barata; sa-east-1 (SP) tem menos latência de SSH e custa mais
   ```
+- ⚠️ **Faça tudo no mesmo terminal.** Os passos seguintes guardam IDs em variáveis
+  (`$VPC`, `$SUBNET`, `$SG`, `$CP`...). Abriu outro terminal? Recupere-as pelo
+  `describe-*` de cada passo, ou anote os IDs conforme aparecem.
 
 > Prefere clicar? O passo a passo pelo console está em
 > [C1.6](#c16--alternativa-pelo-console-sem-cli) — os conceitos são os mesmos.
 
-### C1.2 — escolher VPC e sub-rede (a default serve)
+### C1.2 — criar a VPC do lab (rede isolada)
 
-Toda conta AWS vem com uma **VPC default** (`172.31.0.0/16`) já pública e com
-Internet Gateway — é o suficiente pro lab e poupa você de montar rede na mão.
+Uma VPC **só pro lab**: `10.0.0.0/16`, com uma sub-rede pública `10.0.1.0/24`.
+Isolar tem três vantagens: o CIDR é conhecido (não colide com o pod/service CIDR
+— [C3](#c3--plano-de-ips-na-aws)), nada do lab se mistura com outros recursos da
+conta, e a limpeza no fim é completa.
+
+São 5 peças — é a mesma coisa que o console monta no *"VPC and more"*:
 
 ```bash
-VPC=$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true \
-      --query 'Vpcs[0].VpcId' --output text)
+# 1) a VPC (DNS habilitado: as instâncias ganham nome interno resolvível)
+VPC=$(aws ec2 create-vpc --cidr-block 10.0.0.0/16 \
+      --tag-specifications 'ResourceType=vpc,Tags=[{Key=Name,Value=k8s-lab}]' \
+      --query Vpc.VpcId --output text)
+aws ec2 modify-vpc-attribute --vpc-id $VPC --enable-dns-hostnames
 
-# UMA sub-rede (uma AZ) para as 3 instâncias
-SUBNET=$(aws ec2 describe-subnets --filters Name=vpc-id,Values=$VPC \
-         --query 'Subnets[0].SubnetId' --output text)
+# 2) a sub-rede — UMA, numa AZ só, para as 3 instâncias
+AZ=$(aws ec2 describe-availability-zones --query 'AvailabilityZones[0].ZoneName' --output text)
+SUBNET=$(aws ec2 create-subnet --vpc-id $VPC --cidr-block 10.0.1.0/24 \
+         --availability-zone $AZ \
+         --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=k8s-lab-publica}]' \
+         --query Subnet.SubnetId --output text)
+aws ec2 modify-subnet-attribute --subnet-id $SUBNET --map-public-ip-on-launch
 
-aws ec2 describe-subnets --subnet-ids $SUBNET \
-  --query 'Subnets[0].{Subnet:SubnetId,AZ:AvailabilityZone,Cidr:CidrBlock,IpPublico:MapPublicIpOnLaunch}' \
-  --output table
-echo "VPC=$VPC  SUBNET=$SUBNET"
+# 3) o Internet Gateway (a "porta" da VPC pra internet)
+IGW=$(aws ec2 create-internet-gateway \
+      --tag-specifications 'ResourceType=internet-gateway,Tags=[{Key=Name,Value=k8s-lab}]' \
+      --query InternetGateway.InternetGatewayId --output text)
+aws ec2 attach-internet-gateway --internet-gateway-id $IGW --vpc-id $VPC
+
+# 4) a route table: rota default (0.0.0.0/0) saindo pelo IGW
+RTB=$(aws ec2 create-route-table --vpc-id $VPC \
+      --tag-specifications 'ResourceType=route-table,Tags=[{Key=Name,Value=k8s-lab}]' \
+      --query RouteTable.RouteTableId --output text)
+aws ec2 create-route --route-table-id $RTB --destination-cidr-block 0.0.0.0/0 --gateway-id $IGW
+
+# 5) associar a route table à sub-rede (é isso que a torna "pública")
+aws ec2 associate-route-table --route-table-id $RTB --subnet-id $SUBNET
+
+echo "VPC=$VPC SUBNET=$SUBNET IGW=$IGW RTB=$RTB AZ=$AZ"
 ```
 
-- **Anote o `Cidr`** — é ele que substitui o `192.168.137.0/24` do runbook
-  ([C3](#c3--plano-de-ips-na-aws)).
-- `IpPublico` (`MapPublicIpOnLaunch`) deve ser `True`. Se for `False`, o
-  `--associate-public-ip-address` do [C1.5](#c15--subir-as-3-instâncias) resolve.
+Peça a peça:
+- **VPC** — a rede privada em si. `--enable-dns-hostnames` dá nome DNS interno às
+  instâncias (não é o hostname do Linux — esse é o [C6](#c6--hostname-e-etchosts-o-que-sobra-da-fase-1)).
+- **Sub-rede** `10.0.1.0/24` — onde as 3 EC2 moram. `--map-public-ip-on-launch`
+  faz toda instância nascer com IP público (pra você entrar por SSH).
+- **Internet Gateway + route table** — sem eles, a sub-rede não tem saída e o `apt`
+  da Fase 2 falha. "Sub-rede pública" = sub-rede cuja route table aponta
+  `0.0.0.0/0` pro IGW; não existe uma flag chamada "pública".
 - **As 3 instâncias na mesma sub-rede** — não espalhe por AZs: tráfego entre AZs é
   cobrado e não traz nada pro estudo.
 
-### C1.3 — criar a key pair
+Confira:
 
 ```bash
-aws ec2 create-key-pair --key-name k8s-lab \
-  --query KeyMaterial --output text > ~/.ssh/k8s-lab.pem
-chmod 400 ~/.ssh/k8s-lab.pem
+aws ec2 describe-route-tables --route-table-ids $RTB \
+  --query 'RouteTables[0].Routes[].{Destino:DestinationCidrBlock,Via:GatewayId}' --output table
+# deve listar 10.0.0.0/16 → local  e  0.0.0.0/0 → igw-...
 ```
 
-- A chave privada é mostrada **uma única vez**. Perdeu, criou outra (e as
-  instâncias antigas ficam inacessíveis).
+> **Atalho: usar a VPC default.** Toda conta vem com uma VPC default
+> (`172.31.0.0/16`) já pública. Funciona, mas os IPs `10.0.1.x` deste guia não
+> valem lá — você teria que adaptar o `--private-ip-address` do C1.5 e o
+> `/etc/hosts` do C6 ao CIDR da sub-rede escolhida. Se optar por ela:
+> ```bash
+> VPC=$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query 'Vpcs[0].VpcId' --output text)
+> SUBNET=$(aws ec2 describe-subnets --filters Name=vpc-id,Values=$VPC --query 'Subnets[0].SubnetId' --output text)
+> aws ec2 describe-subnets --subnet-ids $SUBNET --query 'Subnets[0].CidrBlock' --output text   # anote
+> ```
+
+### C1.3 — criar a key pair (uma só, pras 3 instâncias)
+
+```bash
+aws ec2 create-key-pair --key-name k8s-lab --key-type ed25519 \
+  --query KeyMaterial --output text > ~/.ssh/k8s-lab.pem
+chmod 400 ~/.ssh/k8s-lab.pem
+aws ec2 describe-key-pairs --key-names k8s-lab --output table    # confirma que existe na AWS
+```
+
+- **Uma key pair, reusada nos 3 nós** — a AWS guarda só a parte pública e injeta
+  no `~ubuntu/.ssh/authorized_keys` de cada instância que usar `--key-name k8s-lab`.
+- A chave privada é mostrada **uma única vez**, por esse comando. Perdeu, criou
+  outra (e as instâncias antigas ficam inacessíveis).
+- A key pair é **por região**: criou em `us-east-1`, não aparece em `sa-east-1`.
 - `chmod 400` — o SSH recusa chave com permissão aberta.
 
-### C1.4 — criar o Security Group
+> Já tem uma chave SSH sua (`~/.ssh/id_ed25519.pub`)? Dá pra importar em vez de
+> criar: `aws ec2 import-key-pair --key-name k8s-lab --public-key-material fileb://~/.ssh/id_ed25519.pub`
+> — aí o SSH usa a sua chave e você dispensa o `-i`.
+
+### C1.4 — criar o Security Group (com as regras)
 
 ```bash
 SG=$(aws ec2 create-security-group \
       --group-name k8s-lab --description "CKA lab kubeadm" \
       --vpc-id $VPC --query GroupId --output text)
+
+MEUIP=$(curl -s https://checkip.amazonaws.com)/32
+
+# regra 1: tráfego irrestrito ENTRE os nós (self-reference) — a indispensável
+aws ec2 authorize-security-group-ingress --group-id $SG --protocol -1 --source-group $SG
+
+# regra 2: SSH do seu IP
+aws ec2 authorize-security-group-ingress --group-id $SG --protocol tcp --port 22 --cidr $MEUIP
+
 echo "SG=$SG"
 ```
 
-> 🔴 **O SG nasce fechado** (só saída liberada) — sem as regras, nem o SSH entra e
-> o cluster nunca fecha. Aplique agora as **duas regras do perfil mínimo**
-> ([C4](#c4--security-group-as-regras-a-parte-que-mais-quebra)): tráfego livre
-> entre os nós (self-reference) + SSH. As outras são opcionais.
+- **O SG nasce fechado** (só saída liberada) — sem essas duas regras, nem o SSH
+  entra e o `kubeadm join` nunca fecha.
+- **Um SG, anexado às 3 instâncias** — a regra 1 só vale entre instâncias que
+  estão no mesmo SG.
+- O porquê de cada regra, as opcionais (6443, NodePort) e a lista de portas do
+  Kubernetes estão no [C4](#c4--security-group-as-regras-a-parte-que-mais-quebra).
 
-### C1.5 — subir as 3 instâncias
+### C1.5 — subir as 3 instâncias (1 control plane + 2 workers)
 
 Pegue a AMI oficial do Ubuntu 24.04 (parâmetro público da Canonical no SSM — já
 vem sempre na versão mais recente):
@@ -166,7 +282,7 @@ echo "AMI=$AMI"
 #   --query 'sort_by(Images,&CreationDate)[-1].ImageId' --output text)
 ```
 
-Uma função pra não repetir o comando três vezes:
+Uma função pra não repetir o comando três vezes (`subir <nome> <tipo> <ip-privado>`):
 
 ```bash
 subir() {
@@ -176,24 +292,29 @@ subir() {
     --key-name k8s-lab \
     --security-group-ids "$SG" \
     --subnet-id "$SUBNET" \
+    --private-ip-address "$3" \
     --associate-public-ip-address \
     --block-device-mappings '[{"DeviceName":"/dev/sda1","Ebs":{"VolumeSize":20,"VolumeType":"gp3","DeleteOnTermination":true}}]' \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$1}]" \
     --count 1 --query 'Instances[0].InstanceId' --output text
 }
 
-CP=$(subir k8s-cp t3.medium)
-W1=$(subir k8s-w1 t3.small)
-W2=$(subir k8s-w2 t3.small)
+CP=$(subir k8s-cp t3.medium 10.0.1.10)    # 1 control plane
+W1=$(subir k8s-w1 t3.small  10.0.1.11)    # worker 1
+W2=$(subir k8s-w2 t3.small  10.0.1.12)    # worker 2
 echo "CP=$CP W1=$W1 W2=$W2"
 
 aws ec2 wait instance-running --instance-ids $CP $W1 $W2    # bloqueia até as 3 subirem
 ```
 
 Flag a flag:
-- `--instance-type` — o sizing da tabela acima (CP maior que os workers).
+- `--instance-type` — o sizing da topologia acima (CP maior que os workers).
+- `--key-name k8s-lab` — **a mesma key pair** do C1.3 nas três.
 - `--security-group-ids` / `--subnet-id` — **o mesmo SG e a mesma sub-rede nas
   três**. SGs diferentes = nós que não se enxergam (gotcha nº 1 da AWS).
+- `--private-ip-address` — fixa o IP privado do plano (`.10`/`.11`/`.12`). Sem
+  ela a AWS sorteia um IP livre da sub-rede — funciona, mas aí você adapta o
+  `/etc/hosts` e o `kubeadm init` ao que saiu.
 - `--associate-public-ip-address` — IP público pra você fazer SSH.
 - `--block-device-mappings` — 20 GB gp3. `/dev/sda1` é o nome do disco raiz nas
   AMIs da Canonical. `DeleteOnTermination: true` evita EBS órfão cobrando.
@@ -219,26 +340,55 @@ ssh -i ~/.ssh/k8s-lab.pem ubuntu@<ip-publico-do-cp>    # usuário da AMI Ubuntu 
 
 ### C1.6 — alternativa: pelo console (sem CLI)
 
-**EC2 → Instances → Launch instances**, uma vez para o CP e outra para os workers:
+Mesma ordem da CLI: **rede → key pair → security group → instâncias**. Tudo na
+mesma região (canto superior direito do console).
 
-1. **Name and tags:** `k8s-cp` (depois `k8s-w1`, `k8s-w2`).
-2. **Application and OS Images:** Ubuntu → **Ubuntu Server 24.04 LTS (64-bit x86)**.
-3. **Instance type:** `t3.medium` no CP; `t3.small` nos workers.
-4. **Key pair:** *Create new key pair* (RSA, `.pem`) na primeira vez — baixe e
-   guarde; depois é só reusar a mesma.
-5. **Network settings → Edit:**
-   - **Subnet:** escolha **uma** e repita a mesma nas três.
-   - **Auto-assign public IP:** `Enable`.
-   - **Firewall:** na primeira instância, *Create security group* chamado
-     `k8s-lab` com a regra de SSH do **My IP**; nas outras duas, *Select existing
-     security group* → `k8s-lab`. As demais regras você acrescenta no
-     [C4](#c4--security-group-as-regras-a-parte-que-mais-quebra).
-6. **Configure storage:** `20 GiB`, `gp3`.
-7. **Launch instance.**
+**1. VPC** — **VPC → Your VPCs → Create VPC → *VPC and more***:
+- **Name tag auto-generation:** `k8s-lab`
+- **IPv4 CIDR block:** `10.0.0.0/16`
+- **Number of Availability Zones:** `1`
+- **Number of public subnets:** `1` · **private subnets:** `0`
+- **Customize subnets CIDR blocks:** `10.0.1.0/24`
+- **NAT gateways:** `None` (custa caro e não é necessário) · **VPC endpoints:** `None`
+- **DNS options:** marque as duas (*hostnames* e *resolution*)
+- **Create VPC.** Ele cria VPC, sub-rede, IGW e route table já ligados.
+- Depois: **Subnets** → a sub-rede `k8s-lab-subnet-public1-...` → **Actions → Edit
+  subnet settings** → marque **Enable auto-assign public IPv4 address**.
 
-> Dá pra lançar os dois workers de uma vez (*Number of instances: 2*), mas eles
-> saem com a **mesma tag Name** — renomeie um deles pra `k8s-w2` na lista de
-> instâncias (coluna Name → ícone de lápis).
+**2. Key pair** — **EC2 → Network & Security → Key Pairs → Create key pair**:
+- **Name:** `k8s-lab` · **Type:** `ED25519` · **Format:** `.pem`
+- O download acontece **uma vez só**. Mova pra `~/.ssh/k8s-lab.pem` e
+  `chmod 400` (no WSL, copie do `/mnt/c/Users/<você>/Downloads/`).
+
+**3. Security Group** — **EC2 → Security Groups → Create security group**:
+- **Name:** `k8s-lab` · **VPC:** a `k8s-lab-vpc` (⚠️ não a default)
+- **Inbound rules:** *Add rule* → Type **SSH**, Source **My IP**
+- **Create.** Depois, abra o SG criado → *Edit inbound rules* → *Add rule* → Type
+  **All traffic**, Source **Custom** → digite `sg-` e escolha **o próprio
+  `k8s-lab`** (a self-reference só dá pra fazer depois que o SG existe).
+
+**4. Instâncias** — **EC2 → Instances → Launch instances**, **três vezes**, uma por
+linha:
+
+| Launch | Name | Instance type | Primary IP (Advanced network configuration) |
+|:------:|------|---------------|---------------------------------------------|
+| 1º | `k8s-cp` | `t3.medium` | `10.0.1.10` |
+| 2º | `k8s-w1` | `t3.small` | `10.0.1.11` |
+| 3º | `k8s-w2` | `t3.small` | `10.0.1.12` |
+
+Em cada uma:
+1. **Application and OS Images:** Ubuntu → **Ubuntu Server 24.04 LTS**, arquitetura **64-bit (x86)**.
+2. **Key pair:** `k8s-lab` (a do passo 2 — **não** crie outra).
+3. **Network settings → Edit:**
+   - **VPC:** `k8s-lab-vpc` · **Subnet:** a pública do passo 1 (a mesma nas três)
+   - **Auto-assign public IP:** `Enable`
+   - **Firewall:** *Select existing security group* → `k8s-lab`
+   - **Advanced network configuration → Primary IP:** o IP da tabela
+4. **Configure storage:** `20 GiB`, `gp3`.
+5. **Launch instance.**
+
+> Por que não *Number of instances: 2* pros workers? Porque saem com a **mesma tag
+> Name** e sem IP fixo. Três launches separados é mais trabalho e zero surpresa.
 
 ---
 
@@ -297,10 +447,14 @@ Aqui o `192.168.137.x` do runbook vira o CIDR da **sua** sub-rede. Duas regras:
 
 | Host | Papel | IP privado | Substitui, no runbook |
 |------|-------|-----------|------------------------|
-| `k8s-cp` | control plane | | `192.168.137.10` |
-| `k8s-w1` | worker | | `192.168.137.11` |
-| `k8s-w2` | worker | | `192.168.137.12` |
-| CIDR da sub-rede | rede dos nós | | `192.168.137.0/24` |
+| `k8s-cp` | control plane | `10.0.1.10` | `192.168.137.10` |
+| `k8s-w1` | worker | `10.0.1.11` | `192.168.137.11` |
+| `k8s-w2` | worker | `10.0.1.12` | `192.168.137.12` |
+| CIDR da sub-rede | rede dos nós | `10.0.1.0/24` | `192.168.137.0/24` |
+
+> Preenchido com o plano do [C1](#topologia-3-ec2--1-control-plane--2-workers)
+> (VPC dedicada). Usou a VPC default ou instâncias pré-existentes? Substitua pelos
+> IPs privados do seu inventário ([C2](#c2--inventário-dos-nós-preencha)).
 
 ---
 
@@ -321,6 +475,7 @@ prova), são **duas regras** e ponto:
 | 2 | SSH | 22 | **seu IP /32** (ou `0.0.0.0/0`, ver nota) | seu acesso ao lab |
 
 ```bash
+# Já criou pelo C1.4? Essas duas regras já estão aplicadas — pule este bloco.
 # $SG do C1.4 (ou pegue no inventário do C2)
 MEUIP=$(curl -s https://checkip.amazonaws.com)/32
 
@@ -452,7 +607,7 @@ conservador, `1440`.
 > maneira mais rápida de **perder o acesso SSH à instância**. Pule direto pros
 > passos de hostname e `/etc/hosts`.
 
-**Hostname.** A EC2 nomeia o nó como `ip-172-31-1-25`. O kubeadm aceita isso
+**Hostname.** A EC2 nomeia o nó como `ip-10-0-1-10`. O kubeadm aceita isso
 (é o nome que aparece no `kubectl get nodes`), mas nomes assim atrapalham na hora
 de estudar. Renomeie — **em cada nó**:
 
@@ -471,9 +626,9 @@ echo 'preserve_hostname: true' | sudo tee /etc/cloud/cloud.cfg.d/99-hostname.cfg
 sudo tee -a /etc/hosts >/dev/null <<'EOF'
 
 # --- k8s lab (AWS) ---
-172.31.1.10 k8s-cp
-172.31.1.11 k8s-w1
-172.31.1.12 k8s-w2
+10.0.1.10 k8s-cp
+10.0.1.11 k8s-w1
+10.0.1.12 k8s-w2
 EOF
 ```
 
@@ -696,7 +851,17 @@ aws ec2 create-image --instance-id $CP --name "k8s-cp-limpo-$(date +%F)" --no-re
 aws ec2 terminate-instances --instance-ids $CP $W1 $W2
 aws ec2 wait instance-terminated --instance-ids $CP $W1 $W2
 aws ec2 delete-security-group --group-id $SG      # só depois das instâncias sumirem
-aws ec2 delete-key-pair --key-name k8s-lab
+aws ec2 delete-key-pair --key-name k8s-lab && rm -f ~/.ssh/k8s-lab.pem
+
+# a VPC do C1.2 — na ordem inversa da criação (cada peça depende da anterior)
+aws ec2 disassociate-route-table --association-id $(aws ec2 describe-route-tables \
+  --route-table-ids $RTB --query 'RouteTables[0].Associations[0].RouteTableAssociationId' --output text)
+aws ec2 delete-route-table --route-table-id $RTB
+aws ec2 delete-subnet --subnet-id $SUBNET
+aws ec2 detach-internet-gateway --internet-gateway-id $IGW --vpc-id $VPC
+aws ec2 delete-internet-gateway --internet-gateway-id $IGW
+aws ec2 delete-vpc --vpc-id $VPC
+# (se tiver alocado EIP no C8: aws ec2 release-address --allocation-id $EIP)
 
 # confira que não ficou volume EBS órfão cobrando:
 aws ec2 describe-volumes --filters Name=status,Values=available \
@@ -710,8 +875,10 @@ aws ec2 describe-volumes --filters Name=status,Values=available \
 
 ## Checklist de saída (Caminho C)
 
-- [ ] 3 instâncias Ubuntu 24.04 `running`, mesma VPC/sub-rede, CP com ≥ 2 vCPU/2 GB
-- [ ] Key pair `.pem` salva com `chmod 400` e SSH funcionando nas 3
+- [ ] VPC `10.0.0.0/16` com sub-rede pública `10.0.1.0/24` (IGW + rota `0.0.0.0/0`)
+- [ ] 3 instâncias Ubuntu 24.04 `running` — **1 control plane (`k8s-cp`) + 2 workers
+      (`k8s-w1`, `k8s-w2`)** — mesma sub-rede, CP com ≥ 2 vCPU/2 GB
+- [ ] **Uma** key pair `.pem` salva com `chmod 400` e SSH funcionando nas 3
 - [ ] Inventário e plano de **IPs privados** preenchidos ([C2](#c2--inventário-dos-nós-preencha)/[C3](#c3--plano-de-ips-na-aws))
 - [ ] CIDR da VPC **não** colide com `10.244.0.0/16` nem `10.96.0.0/12`
 - [ ] Security Group único nas 3, com **self-reference** (tráfego entre nós) + SSH;
